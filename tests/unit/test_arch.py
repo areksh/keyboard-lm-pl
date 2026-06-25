@@ -53,6 +53,25 @@ def test_autotune_when_model_barely_fits_falls_back_to_batch_one():
     assert accum == 256
 
 
+def test_device_choices_are_auto_cpu_cuda():
+    assert arch.DEVICE_CHOICES == ("auto", "cpu", "cuda")
+
+
+@pytest.mark.parametrize("cuda_available", [True, False])
+def test_resolve_device_cpu_is_always_cpu(cuda_available):
+    assert arch.resolve_device("cpu", cuda_available) == "cpu"
+
+
+def test_resolve_device_auto_follows_availability():
+    assert arch.resolve_device("auto", True) == "cuda"
+    assert arch.resolve_device("auto", False) == "cpu"
+
+
+def test_resolve_device_explicit_cuda_falls_back_to_cpu_when_unavailable():
+    assert arch.resolve_device("cuda", True) == "cuda"
+    assert arch.resolve_device("cuda", False) == "cpu"
+
+
 @pytest.mark.parametrize("tier", ["low", "medium", "high"])
 @pytest.mark.parametrize("gb", [4, 6, 8, 12, 16, 24, 48])
 def test_autotune_invariants(tier, gb):

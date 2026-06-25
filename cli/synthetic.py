@@ -6,10 +6,14 @@ marked `# pragma: no cover`.
 """
 
 import argparse
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from pl_keyboard import synthetic
+from cli import _runtime
+from pl_keyboard import logging_setup, synthetic
+
+log = logging.getLogger("pl_keyboard")
 
 
 def _ollama_client(host: str, model: str) -> Callable[[str], str]:  # pragma: no cover - network I/O
@@ -36,18 +40,29 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rounds", type=int, default=1, help="Times to loop over the topic list.")
     p.add_argument("--topics", nargs="+", default=list(synthetic.TOPICS))
     p.add_argument("--min-words", type=int, default=3)
+    _runtime.add_common_args(p)
     args = p.parse_args(argv)
+    _runtime.configure(args)
 
     client = _ollama_client(args.host, args.model)
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
+    log.info(
+        "generating via %s @ %s: %d round(s) x %d topic(s)",
+        args.model,
+        args.host,
+        args.rounds,
+        len(args.topics),
+    )
 
     n = 0
     with out.open("w", encoding="utf-8") as f:
-        for _ in range(args.rounds):
+        for r in _runtime.progress(range(args.rounds), desc="synth rounds", log=log, unit="round"):
+            log.debug("round %d/%d", r + 1, args.rounds)
             for line in synthetic.generate(client, args.topics, args.per_topic, args.min_words):
                 f.write(line + "\n")
                 n += 1
+                log.log(logging_setup.DEV, "line: %s", line)
 
     print(f"wrote {n} synthetic lines -> {out}")
     return 0

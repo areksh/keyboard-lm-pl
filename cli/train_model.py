@@ -6,10 +6,14 @@ the heavy bits mocked. The actual training loop (`_train_model`) and VRAM probe
 """
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
-from pl_keyboard import arch
+from cli import _runtime
+from pl_keyboard import arch, logging_setup
+
+log = logging.getLogger("pl_keyboard")
 
 
 def _detect_vram() -> int:  # pragma: no cover - depends on GPU presence
@@ -23,6 +27,15 @@ def _detect_vram() -> int:  # pragma: no cover - depends on GPU presence
     return 0
 
 
+def _cuda_available() -> bool:  # pragma: no cover - depends on torch build/GPU
+    try:
+        import torch
+
+        return torch.cuda.is_available()
+    except Exception:
+        return False
+
+
 def _train_model(  # pragma: no cover - heavy torch training, covered by integration smoke
     *,
     config: dict,
@@ -34,6 +47,7 @@ def _train_model(  # pragma: no cover - heavy torch training, covered by integra
     output_dir: str,
     lr: float,
     seed: int,
+    device: str,
 ) -> None:
     import random as _random
 
@@ -64,18 +78,38 @@ def _train_model(  # pragma: no cover - heavy torch training, covered by integra
     model = LlamaForCausalLM(
         LlamaConfig(vocab_size=sp.get_piece_size(), bos_token_id=1, eos_token_id=2, **config)
     )
+    model.to(device)
     model.train()
+    log.info(
+        "training on %s: %s params, batch=%d x grad_accum=%d for %d steps",
+        device,
+        f"{model.num_parameters():,}",
+        batch_size,
+        grad_accum,
+        steps,
+    )
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
 
-    for _ in range(steps):
+    bar = _runtime.progress(range(steps), desc="train", log=log, total=steps, unit="step")
+    for step in bar:
         opt.zero_grad()
+        step_loss = 0.0
         for _ in range(grad_accum):
-            ids = torch.tensor([next(chunks) for _ in range(batch_size)], dtype=torch.long)
-            (model(input_ids=ids, labels=ids).loss / grad_accum).backward()
+            ids = torch.tensor(
+                [next(chunks) for _ in range(batch_size)], dtype=torch.long, device=device
+            )
+            loss = model(input_ids=ids, labels=ids).loss / grad_accum
+            loss.backward()
+            step_loss += loss.item()
         opt.step()
+        bar.set_postfix(loss=f"{step_loss:.3f}")
+        log.log(logging_setup.DEV, "step %d/%d loss=%.4f", step + 1, steps, step_loss)
+        if (step + 1) % 100 == 0:
+            log.debug("step %d/%d loss=%.4f", step + 1, steps, step_loss)
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     model.save_pretrained(output_dir)
+    log.info("saved model to %s", output_dir)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -94,12 +128,26 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ffn", type=int, help="Override intermediate_size.")
     p.add_argument("--batch-size", type=int, default=None)
     p.add_argument("--grad-accum", type=int, default=None)
+    p.add_argument(
+        "--device",
+        choices=arch.DEVICE_CHOICES,
+        default="auto",
+        help="Where to train: auto (GPU if present), cpu, or cuda.",
+    )
+    _runtime.add_common_args(p)
     args = p.parse_args(argv)
+    _runtime.configure(args)
 
     inputs = [f for f in args.input if Path(f).is_file()]
     if not inputs:
         print("no input files found", file=sys.stderr)
         return 1
+
+    cuda = _cuda_available()
+    device = arch.resolve_device(args.device, cuda)
+    if args.device == "cuda" and not cuda:
+        log.warning("CUDA requested but unavailable (CPU torch build or no GPU); using CPU instead")
+    log.info("device=%s (cuda_available=%s)", device, cuda)
 
     config = arch.tier_config(args.tier)
     if args.hidden:
@@ -128,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=args.output_dir,
         lr=args.lr,
         seed=args.seed,
+        device=device,
     )
     print(f"saved model to {args.output_dir}")
     return 0

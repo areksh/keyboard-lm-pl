@@ -14,6 +14,10 @@ requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 
+# tqdm is the only always-on runtime dependency: the CLIs use it for progress
+# bars. It is pure-Python and tiny, so it stays out of the heavy [train] extra.
+dependencies = ["tqdm>=4"]
+
 # Heavy ML deps live in an optional group: the pure `pl_keyboard` library and the
 # whole test suite run without them (tests inject fakes at the heavy boundaries).
 [project.optional-dependencies]

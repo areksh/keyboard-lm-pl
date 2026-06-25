@@ -1,3 +1,5 @@
+import logging
+
 from cli import train_model
 
 
@@ -79,6 +81,52 @@ def test_train_main_detects_vram_when_unspecified(tmp_path, monkeypatch):
     )
     assert rc == 0
     assert captured["batch_size"] == 1 and captured["grad_accum"] == 256
+
+
+def test_train_main_resolves_device_auto_to_cpu_without_gpu(tmp_path, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(train_model, "_train_model", lambda **kw: captured.update(kw))
+    monkeypatch.setattr(train_model, "_cuda_available", lambda: False)
+    rc = train_model.main(
+        ["--input", str(_corpus(tmp_path)), "--sp-model", "t.model", "--output-dir", str(tmp_path)]
+    )
+    assert rc == 0
+    assert captured["device"] == "cpu"
+
+
+def test_train_main_uses_gpu_when_available(tmp_path, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(train_model, "_train_model", lambda **kw: captured.update(kw))
+    monkeypatch.setattr(train_model, "_cuda_available", lambda: True)
+    rc = train_model.main(
+        ["--input", str(_corpus(tmp_path)), "--sp-model", "t.model", "--output-dir", str(tmp_path)]
+    )
+    assert rc == 0
+    assert captured["device"] == "cuda"
+
+
+def test_train_main_warns_and_falls_back_when_cuda_requested_but_absent(
+    tmp_path, monkeypatch, caplog
+):
+    captured = {}
+    monkeypatch.setattr(train_model, "_train_model", lambda **kw: captured.update(kw))
+    monkeypatch.setattr(train_model, "_cuda_available", lambda: False)
+    with caplog.at_level(logging.WARNING, logger="pl_keyboard"):
+        rc = train_model.main(
+            [
+                "--input",
+                str(_corpus(tmp_path)),
+                "--sp-model",
+                "t.model",
+                "--output-dir",
+                str(tmp_path),
+                "--device",
+                "cuda",
+            ]
+        )
+    assert rc == 0
+    assert captured["device"] == "cpu"
+    assert any("CUDA" in r.message for r in caplog.records)
 
 
 def test_train_main_no_inputs_returns_error(tmp_path, capsys):

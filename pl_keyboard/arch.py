@@ -49,6 +49,23 @@ _ACT_BYTES_FACTOR = 64
 _BATCH_CHOICES = (64, 32, 16, 8, 4, 2, 1)
 
 
+DEVICE_CHOICES = ("auto", "cpu", "cuda")
+
+
+def resolve_device(requested: str, cuda_available: bool) -> str:
+    """Map a ``--device`` request to the device the trainer should actually use.
+
+    ``auto`` picks the GPU when present; an explicit ``cuda`` falls back to the
+    CPU (rather than crashing) when no CUDA build/GPU is available — the caller
+    is expected to warn in that case.
+    """
+    if requested == "cpu":
+        return "cpu"
+    if requested == "cuda":
+        return "cuda" if cuda_available else "cpu"
+    return "cuda" if cuda_available else "cpu"  # auto
+
+
 def tier_config(name: str) -> dict:
     """Full model config for a named tier (preset merged with FIXED_CONFIG)."""
     if name not in TIERS:

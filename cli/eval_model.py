@@ -8,11 +8,15 @@ torch/transformers/sentencepiece model and is marked `# pragma: no cover`
 
 import argparse
 import json
+import logging
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from cli import _runtime
 from pl_keyboard import evaluation
+
+log = logging.getLogger("pl_keyboard")
 
 # (restore folded word, predict next word, score line -> (sum_nll, n_tokens)).
 Model = tuple[Callable[[str], str], Callable[[str], str], Callable[[str], tuple[float, int]]]
@@ -73,13 +77,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--sp-model", required=True, help="SentencePiece .model file.")
     p.add_argument("--eval-file", default=None, help="Held-out text for perplexity (optional).")
     p.add_argument("--report", default=None, help="Write the JSON report here (optional).")
+    _runtime.add_common_args(p)
     args = p.parse_args(argv)
+    _runtime.configure(args)
 
     if not Path(args.model_dir).is_dir():
         print(f"model dir not found: {args.model_dir}", file=sys.stderr)
         return 1
 
+    log.info("loading model from %s for evaluation", args.model_dir)
     restore, predict, score = _load_model(args.model_dir, args.sp_model)
+    log.debug("running diacritic-restoration and next-word benchmarks")
     report: dict[str, object] = {
         "diacritic_restoration_accuracy": evaluation.accuracy(
             evaluation.DIACRITIC_BENCHMARK, restore

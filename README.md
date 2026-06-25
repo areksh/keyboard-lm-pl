@@ -114,6 +114,28 @@ python 08_quantize.py --input pl-f16.gguf           # -> pl-Q3_K_M/Q4_0/Q6_K/Q8_
 python 09_eval.py --model-dir models/pl --sp-model data/tok/pl.model --eval-file data/heldout.txt
 ```
 
+## Watching it run: progress & verbosity
+
+Every step accepts `--loglevel {none|error|warning|info|debug|dev}` (default `info`, ordered
+least→most verbose). The slow steps (`train`, `clean`, `make_xbu`, `download`, `quantize`,
+`convert`) show a [tqdm](https://tqdm.github.io/) progress bar at `info`+ — training's bar carries a
+live loss, rate, and ETA so you can tell it's working. `none` silences both the bar and the logs
+while still printing the final result line; `debug` adds per-file / periodic detail; `dev` (one rung
+below `debug`) is the per-step firehose. Result lines go to stdout, logs/bars to stderr.
+
+## Using your GPU
+
+`06_train_model.py` takes `--device {auto|cpu|cuda}` (default `auto`: GPU if present, else CPU). The
+trainer moves the model and every batch onto that device and logs `device=… (cuda_available=…)` at
+startup, so you can confirm at a glance (and `nvidia-smi` should then show the process). **Two things
+must both hold to use the GPU:**
+
+1. **A CUDA build of torch.** The project venv ships **CPU-only torch on purpose** (`torch …+cpu`,
+   for which `torch.cuda.is_available()` is always `False`). Install a CUDA build matching your
+   driver, e.g. `uv pip install torch --index-url https://download.pytorch.org/whl/cu124`.
+2. **`--device auto` (or `cuda`).** With a CUDA torch build present, `auto` selects the GPU. Passing
+   `--device cuda` *without* a CUDA build warns and falls back to CPU rather than crashing.
+
 ## Synthetic data (Ollama)
 
 Step `03` generates synthetic Polish lines by calling a **local [Ollama](https://ollama.com)
@@ -133,7 +155,8 @@ downloaded corpora.
 ## Model tiers
 
 Architecture is **your choice**, driven by your GPU (no default imposed). `06_train_model.py`
-exposes `--tier` and auto-tunes batch/grad-accum to your VRAM (`pl_keyboard/arch.py`).
+exposes `--tier` and auto-tunes batch/grad-accum to your VRAM (`pl_keyboard/arch.py`); see
+[Using your GPU](#using-your-gpu) for selecting the training device.
 
 | Tier | hidden/layers/heads/ffn | ~params | VRAM (bs64 / bs16+accum) | ~time / 200k steps |
 |---|---|---|---|---|

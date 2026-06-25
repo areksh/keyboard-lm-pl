@@ -1,10 +1,14 @@
 """05_make_xbu_data: expand clean sentences into XBU autocorrect training lines."""
 
 import argparse
+import logging
 import random
 from pathlib import Path
 
+from cli import _runtime
 from pl_keyboard.xbu import augment_line
+
+log = logging.getLogger("pl_keyboard")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -22,7 +26,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--copies", type=int, default=3, help="Augmented copies per sentence.")
     p.add_argument("--seed", type=int, default=42)
+    _runtime.add_common_args(p)
     args = p.parse_args(argv)
+    _runtime.configure(args)
 
     rng = random.Random(args.seed)
     out = Path(args.output)
@@ -31,7 +37,11 @@ def main(argv: list[str] | None = None) -> int:
     n_in = n_out = 0
     with out.open("w", encoding="utf-8") as fout:
         for inp in args.input:
-            for line in Path(inp).read_text(encoding="utf-8").splitlines():
+            sentences = Path(inp).read_text(encoding="utf-8").splitlines()
+            log.info("augmenting %s (%d lines)", inp, len(sentences))
+            for line in _runtime.progress(
+                sentences, desc=f"xbu {Path(inp).name}", log=log, total=len(sentences)
+            ):
                 line = line.strip()
                 if not line:
                     continue

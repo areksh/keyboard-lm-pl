@@ -6,10 +6,14 @@ tests/integration/test_convert_smoke.py.
 """
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
+from cli import _runtime
 from pl_keyboard import gguf_meta
+
+log = logging.getLogger("pl_keyboard")
 
 
 def _convert(  # pragma: no cover - heavy torch/gguf I/O, covered by integration smoke test
@@ -71,7 +75,9 @@ def _convert(  # pragma: no cover - heavy torch/gguf I/O, covered by integration
     # reads back for keyboardlm.ext_tokenizer_data.
     writer.add_array("keyboardlm.ext_tokenizer_data", Path(sp_model).read_bytes())
 
-    for hf_name, tensor in state.items():
+    for hf_name, tensor in _runtime.progress(
+        state.items(), desc="tensors", log=log, total=len(state), unit="tensor"
+    ):
         gguf_name = gguf_meta.hf_to_gguf_tensor_name(hf_name)
         if gguf_name is None:
             continue
@@ -95,7 +101,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--languages", nargs="+", default=["pl"])
     p.add_argument("--features", default=gguf_meta.DEFAULT_FEATURES)
     p.add_argument("--name", default="pl_keyboard")
+    _runtime.add_common_args(p)
     args = p.parse_args(argv)
+    _runtime.configure(args)
 
     try:
         gguf_meta.validate(args.languages, args.features)
@@ -105,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
+    log.info("converting %s -> %s (languages=%s)", args.model_dir, out, ",".join(args.languages))
     _convert(args.model_dir, args.sp_model, str(out), args.name, args.languages, args.features)
     print(f"wrote {out}")
     return 0
