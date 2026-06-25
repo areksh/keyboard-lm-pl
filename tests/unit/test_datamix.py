@@ -6,6 +6,13 @@ from pl_keyboard import datamix
 
 
 class ScriptedRandom(random.Random):
+    # __new__ must swallow the positional arg: on Python 3.10 the C base
+    # random.Random.__new__ still seeds from the first positional constructor
+    # arg, so letting the list reach it raises "unhashable type: 'list'" (3.11+
+    # seeds only in __init__, where we pass nothing, so it slips through there).
+    def __new__(cls, randoms):
+        return super().__new__(cls)
+
     def __init__(self, randoms):
         super().__init__()
         self._randoms = deque(randoms)
