@@ -1,0 +1,22 @@
+# Woodpecker CI for Codeberg — mirrors .github/workflows/ci.yml.
+# Runs the lint + 100% coverage gate on Python 3.10 and 3.12. Only the [dev]
+# extra is installed, so the contract/integration tests that need [train]
+# self-skip via pytest.importorskip (same as on GitHub).
+
+when:
+  - event: [push, pull_request]
+
+matrix:
+  PYTHON_VERSION:
+    - "3.10"
+    - "3.12"
+
+steps:
+  - name: test
+    image: python:${PYTHON_VERSION}
+    commands:
+      - python -m pip install --upgrade pip
+      - pip install -e ".[dev]"
+      - ruff check .
+      - ruff format --check .
+      - pytest --cov=pl_keyboard --cov=cli --cov-branch --cov-report=term-missing

@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+.ruff_cache/
+
+# Project data & artifacts (large, regenerated)
+data/
+models/
+*.gguf
+*.model
+*.vocab
