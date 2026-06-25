@@ -136,6 +136,12 @@ must both hold to use the GPU:**
 2. **`--device auto` (or `cuda`).** With a CUDA torch build present, `auto` selects the GPU. Passing
    `--device cuda` *without* a CUDA build warns and falls back to CPU rather than crashing.
 
+On CUDA the loop trains with **bf16 autocast (mixed precision)**: matmuls/attention run in bf16 on
+the tensor cores while the master weights, gradients, and Adam states stay fp32 (bf16 shares fp32's
+exponent range, so no loss scaling is needed). This ~halves activation memory — roughly doubling the
+batch that fits — for negligible quality cost, which is moot anyway since the model ships quantized.
+CPU runs stay fp32. The activation estimate in `pl_keyboard/arch.py` is calibrated to this bf16 cost.
+
 ## Synthetic data (Ollama)
 
 Step `03` generates synthetic Polish lines by calling a **local [Ollama](https://ollama.com)

@@ -42,10 +42,14 @@ TIERS: dict[str, dict[str, int]] = {
     },
 }
 
-# Training-memory heuristics (bf16 weights + fp32 Adam states ~= 16 B/param).
+# Training-memory heuristics: fp32 weights + grads + fp32 Adam states ~= 16 B/param
+# (bf16 autocast keeps the master weights/optimizer in fp32, so this is unchanged).
 _BYTES_PER_PARAM_TRAIN = 16
 # Per-sample activation cost proxy: context * hidden * layers * this many bytes.
-_ACT_BYTES_FACTOR = 64
+# Calibrated to the training loop's bf16 autocast (cli/train_model.py): activations
+# are ~bf16, about half the fp32 cost, so the low tier needs ~90 MB/sample =
+# 256*512*10*70 B. If the loop ever drops autocast (pure fp32), this ~doubles.
+_ACT_BYTES_FACTOR = 70
 _BATCH_CHOICES = (64, 32, 16, 8, 4, 2, 1)
 # Fixed reserve, on top of weights+optimizer, for the CUDA context and the
 # cuBLAS/cuDNN workspaces — overhead the per-sample proxy above doesn't model.

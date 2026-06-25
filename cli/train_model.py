@@ -94,6 +94,12 @@ def _train_model(  # pragma: no cover - heavy torch training, covered by integra
     )
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
 
+    # bf16 mixed precision on CUDA: ~halves activation memory (and uses the
+    # tensor cores) while the params/grads/Adam states stay fp32. bf16 shares
+    # fp32's exponent range, so no GradScaler is needed. Disabled on CPU.
+    use_amp = device == "cuda"
+    if use_amp:
+        log.info("using bf16 autocast (mixed precision)")
     bar = _runtime.progress(range(steps), desc="train", log=log, total=steps, unit="step")
     for step in bar:
         opt.zero_grad()
@@ -102,7 +108,8 @@ def _train_model(  # pragma: no cover - heavy torch training, covered by integra
             ids = torch.tensor(
                 [next(chunks) for _ in range(batch_size)], dtype=torch.long, device=device
             )
-            loss = model(input_ids=ids, labels=ids).loss / grad_accum
+            with torch.autocast(device_type=device, dtype=torch.bfloat16, enabled=use_amp):
+                loss = model(input_ids=ids, labels=ids).loss / grad_accum
             loss.backward()
             step_loss += loss.item()
         opt.step()

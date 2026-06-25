@@ -47,10 +47,11 @@ def test_autotune_large_vram_uses_max_batch():
     assert arch.autotune(24 * 1024**3, arch.tier_config("low")) == (64, 4)
 
 
-def test_autotune_reserves_headroom_so_an_8gb_card_does_not_pick_max_batch():
-    # 8 GiB is the realistic OOM case: budgeted naively it picks batch 64, which
-    # overflows once the CUDA context + workspaces + fragmentation are counted.
-    # The overhead reserve must pull it down to a batch that actually fits.
+def test_autotune_fits_low_tier_on_an_8gb_card():
+    # 8 GiB is the realistic OOM case. With bf16 autocast the low tier costs
+    # ~90 MB/sample of activations (~half the fp32 cost), so once the per-sample
+    # cost, overhead reserve, and utilization margin are honest an 8 GiB card
+    # lands on batch 32 — which fits, rather than OOMing at the optimistic 64.
     bs, accum = arch.autotune(8 * 1024**3, arch.tier_config("low"))
     assert (bs, accum) == (32, 8)
     assert bs * accum >= arch.TARGET_EFFECTIVE_BATCH
