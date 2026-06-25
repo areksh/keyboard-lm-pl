@@ -130,9 +130,15 @@ trainer moves the model and every batch onto that device and logs `device=… (c
 startup, so you can confirm at a glance (and `nvidia-smi` should then show the process). **Two things
 must both hold to use the GPU:**
 
-1. **A CUDA build of torch.** The project venv ships **CPU-only torch on purpose** (`torch …+cpu`,
-   for which `torch.cuda.is_available()` is always `False`). Install a CUDA build matching your
-   driver, e.g. `uv pip install torch --index-url https://download.pytorch.org/whl/cu124`.
+1. **A CUDA build of torch.** On Linux a plain `pip install -e ".[train]"` already pulls the **CUDA
+   build** by default — the wheel bundles the CUDA runtime, so you don't install CUDA yourself and
+   most setups are GPU-ready out of the box. The **CPU-only** build (`torch …+cpu`, for which
+   `torch.cuda.is_available()` is always `False`) is *opt-in* via the CPU index
+   (`--index-url https://download.pytorch.org/whl/cpu`) — that's how the repo's committed dev `.venv`
+   is built, to stay lightweight, and it can't touch the GPU. Check yours with
+   `python -c "import torch; print(torch.__version__, torch.cuda.is_available())"`; if it prints a
+   `+cpu` version, reinstall a CUDA wheel matching your driver, e.g.
+   `pip install torch --index-url https://download.pytorch.org/whl/cu124`.
 2. **`--device auto` (or `cuda`).** With a CUDA torch build present, `auto` selects the GPU. Passing
    `--device cuda` *without* a CUDA build warns and falls back to CPU rather than crashing.
 
