@@ -21,7 +21,11 @@ def _detect_vram() -> int:  # pragma: no cover - depends on GPU presence
         import torch
 
         if torch.cuda.is_available():
-            return torch.cuda.get_device_properties(0).total_memory
+            # Free (not total) memory: the desktop/compositor and other
+            # processes already hold some of the card, and autotune budgets
+            # against what's actually available.
+            free, _total = torch.cuda.mem_get_info()
+            return free
     except Exception:
         pass
     return 0

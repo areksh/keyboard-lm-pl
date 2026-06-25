@@ -156,7 +156,10 @@ downloaded corpora.
 
 Architecture is **your choice**, driven by your GPU (no default imposed). `06_train_model.py`
 exposes `--tier` and auto-tunes batch/grad-accum to your VRAM (`pl_keyboard/arch.py`); see
-[Using your GPU](#using-your-gpu) for selecting the training device.
+[Using your GPU](#using-your-gpu) for selecting the training device. Auto-tune budgets against
+*free* (not total) memory and reserves headroom for the CUDA context + fragmentation, so e.g. an
+8 GB card lands on `batch=32 grad_accum=8`. If you still hit an OOM, override with explicit
+`--batch-size N --grad-accum M` (keep `N×M ≈ 256` to preserve the effective batch).
 
 | Tier | hidden/layers/heads/ffn | ~params | VRAM (bs64 / bs16+accum) | ~time / 200k steps |
 |---|---|---|---|---|

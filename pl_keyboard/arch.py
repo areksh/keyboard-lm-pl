@@ -47,6 +47,13 @@ _BYTES_PER_PARAM_TRAIN = 16
 # Per-sample activation cost proxy: context * hidden * layers * this many bytes.
 _ACT_BYTES_FACTOR = 64
 _BATCH_CHOICES = (64, 32, 16, 8, 4, 2, 1)
+# Fixed reserve, on top of weights+optimizer, for the CUDA context and the
+# cuBLAS/cuDNN workspaces — overhead the per-sample proxy above doesn't model.
+_CUDA_OVERHEAD_BYTES = 1024**3
+# Fraction of the remaining budget we actually spend on activations, leaving a
+# margin for allocator fragmentation and slack in the per-sample estimate.
+# Without it, a card whose total *looks* big enough still OOMs at the edge.
+_MEMORY_UTILIZATION = 0.8
 
 
 DEVICE_CHOICES = ("auto", "cpu", "cuda")
@@ -90,9 +97,16 @@ def autotune(
     target_effective_batch: int = TARGET_EFFECTIVE_BATCH,
 ) -> tuple[int, int]:
     """Pick (batch_size, grad_accum) that fit `vram_bytes` while keeping the
-    effective batch >= `target_effective_batch`."""
+    effective batch >= `target_effective_batch`.
+
+    `vram_bytes` should be the *free* memory on the device (see the training
+    CLI's `_detect_vram`), not its total capacity: the desktop/compositor and
+    other processes hold some of it. On top of that, the weights+optimizer, a
+    fixed CUDA-context/workspace reserve, and a utilization margin are all
+    subtracted before the rest is divided into per-sample activation budget.
+    """
     reserved = estimate_params(config, vocab_size) * _BYTES_PER_PARAM_TRAIN
-    available = vram_bytes - reserved
+    available = int((vram_bytes - reserved - _CUDA_OVERHEAD_BYTES) * _MEMORY_UTILIZATION)
     act_per_sample = (
         config["max_position_embeddings"]
         * config["hidden_size"]
