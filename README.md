@@ -1,4 +1,4 @@
-# keyboard-lm-pl
+_Polskie README jest [tutaj](README.pl.md) (przetłumaczone za pomocą DeepL, więc nie mogę zagwarantować, że tłumaczenie jest dobre)._
 
 Train a **Polish** next-word / swipe language model for [FUTO Keyboard](https://keyboard.futo.org),
 shipped as a GGUF you can import on-device. FUTO ships an English-only transformer; this project
