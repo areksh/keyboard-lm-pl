@@ -173,11 +173,15 @@ exposes `--tier` and auto-tunes batch/grad-accum to your VRAM (`pl_keyboard/arch
 8 GB card lands on `batch=32 grad_accum=8`. If you still hit an OOM, override with explicit
 `--batch-size N --grad-accum M` (keep `N×M ≈ 256` to preserve the effective batch).
 
-| Tier | hidden/layers/heads/ffn | ~params | VRAM (bs64 / bs16+accum) | ~time / 200k steps |
+| Tier | hidden/layers/heads/ffn | ~params | VRAM (bs64 / bs16+accum) | ~time / 200k steps (desktop 4090) |
 |---|---|---|---|---|
 | low | 512/10/8/2048 | ~57M | ~8–10 / ~6 GB | ~25–35 h |
 | medium | 640/12/10/2560 | ~86M | ~12–14 / ~8 GB | ~35–45 h |
 | high | 768/12/12/3072 | ~136M | ~18–22 / ~10–12 GB | ~50–60 h |
+
+The time column is anchored to a **desktop RTX 4090**. Weaker/laptop GPUs scale roughly linearly with
+tensor throughput and are also pushed onto the small-batch + grad-accumulation path by limited VRAM,
+so expect **~3–5× longer**: e.g. a **mobile 4070 (8 GB) runs the low tier in ~100 h**.
 
 No/weak GPU → cloud (Runpod/Vast, ~$15–50/run). Releases will publish pre-built quantized `.gguf`s
 so most users never train.
