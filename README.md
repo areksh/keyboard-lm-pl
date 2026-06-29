@@ -15,7 +15,7 @@ restores diacritics from base-latin typing: you type `lozko`, you get `łóżko`
 > [issue #1212](https://github.com/futo-org/android-keyboard/issues/1212). As with the German
 > model, [Claude](https://www.anthropic.com/claude) was used extensively throughout development.
 
-> **Status.** Built test-first, **100% line+branch coverage, 185 tests.** The full pipeline is in
+> **Status.** Built test-first, **100% line+branch coverage, 208 tests.** The full pipeline is in
 > place: download (`01`), clean (`02`), synthetic (`03`), tokenizer (`04`/`04b`), XBU (`05`),
 > train (`06`), convert (`07`), quantize (`08`), eval (`09`). A real (tiny) train → convert run is
 > proven end-to-end to emit a keyboard-valid GGUF (integration smoke test), a real SentencePiece
@@ -111,8 +111,15 @@ python 06_train_model.py --input data/clean.txt data/xbu.txt --sp-model data/tok
     --tier medium --output-dir models/pl            # auto-tunes batch to your VRAM
 python 07_convert_to_gguf.py --model-dir models/pl --sp-model data/tok/pl.model --output pl-f16.gguf
 python 08_quantize.py --input pl-f16.gguf           # -> pl-Q3_K_M/Q4_0/Q6_K/Q8_0.gguf
-python 09_eval.py --model-dir models/pl --sp-model data/tok/pl.model --eval-file data/heldout.txt
+python 09_eval.py --model-dir models/pl --sp-model data/tok/pl.model --eval-file data/heldout.txt \
+    --show-examples   # also prints each benchmark case as input -> model output (to stderr)
 ```
+
+`09_eval.py` reports held-out perplexity plus diacritic-restoration and next-word accuracy. Pass
+`--show-examples` to print each benchmark case as `input -> model output` (to stderr, so the JSON
+report on stdout stays pipeable) — invaluable for telling "the model is wrong" apart from "the eval
+prompt is wrong". Restoration is scored case-insensitively (a no-context prompt makes the model emit
+a sentence-initial capital, e.g. `lozko -> Łóżko`, which still restores the diacritics correctly).
 
 ## Watching it run: progress & verbosity
 
@@ -163,6 +170,28 @@ ollama list                                      # verify; or: curl http://local
 Then run step `03`. Override `--model <name>` for any other installed model, or `--host <url>` to
 point at a remote/non-default server. This step is optional — skip it if you only train on the
 downloaded corpora.
+
+## Quantizing (`llama-quantize`)
+
+Step `08` shells out to **`llama-quantize`** from [llama.cpp](https://github.com/ggml-org/llama.cpp)
+to turn the F16 GGUF into shippable quants. It's an external binary, not a Python dependency, so it
+isn't in the venv — without it you'll get `FileNotFoundError: ... 'llama-quantize'`. Quantizing is a
+**CPU** operation, so you don't need a GPU build of llama.cpp; any variant works.
+
+```bash
+# Arch (any backend variant ships llama-quantize; quantizing is CPU-only):
+sudo pacman -S llama.cpp            # or llama.cpp-vulkan / -cuda / -hip if you also want GPU inference
+# macOS:
+brew install llama.cpp
+# From source (any OS):
+git clone https://github.com/ggml-org/llama.cpp && cd llama.cpp
+cmake -B build && cmake --build build --config Release -j --target llama-quantize
+```
+
+If the binary is on your `PATH` (the package installs do this), `python 08_quantize.py --input
+pl-f16.gguf` just works. Otherwise point at it explicitly:
+`--llama-quantize /path/to/llama.cpp/build/bin/llama-quantize`. Prebuilt binaries are also on the
+[llama.cpp releases page](https://github.com/ggml-org/llama.cpp/releases).
 
 ## Model tiers
 
