@@ -55,10 +55,22 @@ def _load_model(model_dir: str, sp_model: str) -> Model:  # pragma: no cover - h
         out = greedy([bos, xbu, *char_ids, xbc], max_new=12, stop=xec)
         return sp.decode(out).strip()
 
+    def encode_context(context: str) -> list[int]:
+        # SentencePiece (treat_whitespace_as_suffix) strips a trailing space, so
+        # "do " tokenizes exactly like "do" with NO word boundary -> the model
+        # completes the word ("do" -> "dokladnie") instead of predicting the next
+        # one. Append a throwaway word so the last real token keeps its suffix-▁,
+        # then drop the throwaway: a genuine word boundary, as seen in training.
+        full = sp.encode(context + " x", out_type=int)
+        tail = sp.encode("x", out_type=int)
+        return full[: len(full) - len(tail)]
+
     def predict(context: str) -> str:
-        out = greedy([bos, *sp.encode(context + " ", out_type=int)], max_new=6, stop=eos)
-        decoded = sp.decode(out).strip().split(" ")
-        return decoded[0] if decoded else ""
+        # Stop at <XBU>: with no preceding context the model may try to emit an
+        # autocorrect span rather than a plain next word — that's not a prediction.
+        out = greedy([bos, *encode_context(context)], max_new=6, stop=xbu)
+        word = sp.decode(out).strip().split(" ")[0] if out else ""
+        return word.strip(",.!?;:\"'()")  # trailing punctuation isn't part of the word
 
     def score(line: str) -> tuple[float, int]:
         ids = [bos, *sp.encode(line, out_type=int), eos]
@@ -77,6 +89,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--sp-model", required=True, help="SentencePiece .model file.")
     p.add_argument("--eval-file", default=None, help="Held-out text for perplexity (optional).")
     p.add_argument("--report", default=None, help="Write the JSON report here (optional).")
+    p.add_argument(
+        "--show-examples",
+        action="store_true",
+        help="Print per-case input->output benchmark examples to stderr.",
+    )
     _runtime.add_common_args(p)
     args = p.parse_args(argv)
     _runtime.configure(args)
@@ -84,13 +101,16 @@ def main(argv: list[str] | None = None) -> int:
     if not Path(args.model_dir).is_dir():
         print(f"model dir not found: {args.model_dir}", file=sys.stderr)
         return 1
+    if args.eval_file and not Path(args.eval_file).is_file():
+        print(f"eval file not found: {args.eval_file}", file=sys.stderr)
+        return 1
 
     log.info("loading model from %s for evaluation", args.model_dir)
     restore, predict, score = _load_model(args.model_dir, args.sp_model)
     log.debug("running diacritic-restoration and next-word benchmarks")
     report: dict[str, object] = {
         "diacritic_restoration_accuracy": evaluation.accuracy(
-            evaluation.DIACRITIC_BENCHMARK, restore
+            evaluation.DIACRITIC_BENCHMARK, restore, normalize=str.lower
         ),
         "next_word_accuracy": evaluation.accuracy(evaluation.NEXT_WORD_BENCHMARK, predict),
         "perplexity": None,
@@ -110,4 +130,20 @@ def main(argv: list[str] | None = None) -> int:
         out = Path(args.report)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text + "\n", encoding="utf-8")
+    if args.show_examples:
+        _print_examples(
+            "diacritic restoration",
+            evaluation.run_benchmark(evaluation.DIACRITIC_BENCHMARK, restore, normalize=str.lower),
+        )
+        _print_examples(
+            "next word",
+            evaluation.run_benchmark(evaluation.NEXT_WORD_BENCHMARK, predict),
+        )
     return 0
+
+
+def _print_examples(title: str, results: list[tuple[str, str, str, bool]]) -> None:
+    """Show each benchmark case as scored, so a 0.0 isn't an opaque mystery."""
+    print(f"\n{title}:", file=sys.stderr)
+    for inp, expected, got, hit in results:
+        print(f"  [{'OK' if hit else '  '}] {inp} -> {got}  (want {expected})", file=sys.stderr)

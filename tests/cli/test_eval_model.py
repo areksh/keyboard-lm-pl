@@ -28,6 +28,34 @@ def test_eval_missing_model_dir_returns_error(tmp_path, capsys):
     assert "model dir not found" in capsys.readouterr().err
 
 
+def test_eval_missing_eval_file_returns_error_before_loading(tmp_path, monkeypatch, capsys):
+    model_dir = tmp_path / "m"
+    model_dir.mkdir()
+    loaded = False
+
+    def boom(model_dir, sp_model):
+        nonlocal loaded
+        loaded = True
+        return (lambda folded: "", lambda context: "", lambda line: (1.0, 2))
+
+    monkeypatch.setattr(eval_model, "_load_model", boom)
+
+    rc = eval_model.main(
+        [
+            "--model-dir",
+            str(model_dir),
+            "--sp-model",
+            "t.model",
+            "--eval-file",
+            str(tmp_path / "missing.txt"),
+        ]
+    )
+
+    assert rc == 1
+    assert "eval file not found" in capsys.readouterr().err
+    assert loaded is False  # validated before paying for the model load
+
+
 def test_eval_reports_benchmark_accuracies_without_eval_file(tmp_path, monkeypatch, capsys):
     model_dir = tmp_path / "m"
     model_dir.mkdir()
@@ -45,6 +73,27 @@ def test_eval_reports_benchmark_accuracies_without_eval_file(tmp_path, monkeypat
     assert report["diacritic_restoration_accuracy"] == 1 / len(evaluation.DIACRITIC_BENCHMARK)
     assert report["next_word_accuracy"] == 1 / len(evaluation.NEXT_WORD_BENCHMARK)
     assert report["perplexity"] is None
+
+
+def test_eval_show_examples_prints_input_output_pairs(tmp_path, monkeypatch, capsys):
+    model_dir = tmp_path / "m"
+    model_dir.mkdir()
+    monkeypatch.setattr(
+        eval_model,
+        "_load_model",
+        _fake_model(restore_map={"lozko": "łóżko"}, predict_map={"Stanów": "Zjednoczonych"}),
+    )
+
+    rc = eval_model.main(
+        ["--model-dir", str(model_dir), "--sp-model", "t.model", "--show-examples"]
+    )
+
+    assert rc == 0
+    captured = capsys.readouterr()
+    # JSON report still goes to stdout; the input->output examples go to stderr.
+    json.loads(captured.out)
+    assert "lozko -> łóżko" in captured.err
+    assert "Stanów -> Zjednoczonych" in captured.err
 
 
 def test_eval_computes_perplexity_and_writes_report_file(tmp_path, monkeypatch):

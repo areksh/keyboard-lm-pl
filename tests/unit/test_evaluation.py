@@ -16,6 +16,28 @@ def test_accuracy_empty_cases_is_zero():
     assert evaluation.accuracy([], lambda s: s) == 0.0
 
 
+def test_accuracy_applies_normalize_to_both_sides():
+    # Diacritic restoration is scored case-insensitively: a no-context XBU prompt
+    # makes the model emit a sentence-initial capital ("Łóżko"), which still
+    # restores the diacritics correctly. normalize folds that away on both sides.
+    cases = [("lozko", "łóżko")]
+    predict = {"lozko": "Łóżko"}.__getitem__
+    assert evaluation.accuracy(cases, predict) == 0.0  # case-sensitive default misses
+    assert evaluation.accuracy(cases, predict, normalize=str.lower) == 1.0
+
+
+def test_run_benchmark_returns_per_case_results_with_hit_flag():
+    cases = [("a", "X"), ("b", "y")]
+    predict = {"a": "x", "b": "y"}.__getitem__
+    # case-insensitive normalize: "x" counts as a hit for "X".
+    assert evaluation.run_benchmark(cases, predict, normalize=str.lower) == [
+        ("a", "X", "x", True),
+        ("b", "y", "y", True),
+    ]
+    # case-sensitive default: "x" != "X".
+    assert evaluation.run_benchmark(cases, predict)[0] == ("a", "X", "x", False)
+
+
 def test_perplexity_is_exp_of_mean_nll():
     assert evaluation.perplexity(0.0, 5) == pytest.approx(1.0)
     assert evaluation.perplexity(2.0, 2) == pytest.approx(math.e)
