@@ -79,6 +79,7 @@ test in `pl_keyboard/`:
 | `keyboardlm.languages` / `.features` / `.ext_tokenizer_type=sentencepiece` metadata | `gguf_meta.py` |
 | features ⊆ supported set (`opt_*`/`_*` tolerated) | `gguf_meta.py` |
 | SentencePiece, `treat_whitespace_as_suffix`, `<XBU><XBC><XEC><CHAR_A..Z>` specials | `tokenizer_spec.py`, `tokens.py` |
+| `remove_extra_whitespaces=False` so a trailing space survives as the word-final `_` boundary the next-word prompt `tokenize(context + " ")` relies on | `tokenizer_spec.py` |
 | **`<CHAR_A>..<CHAR_Z>` at 26 consecutive ids** (native code assumes it) | `tokenizer_spec.verify_special_tokens` |
 | training-line format `… <XBU><CHAR_…><XBC>truth <XEC>` (space after truth, none after tags) | `tokens.format_word_correction` |
 

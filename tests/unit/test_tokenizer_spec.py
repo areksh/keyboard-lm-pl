@@ -13,6 +13,11 @@ def test_training_kwargs():
     assert kw["treat_whitespace_as_suffix"] is True
     assert kw["byte_fallback"] is True
     assert kw["add_dummy_prefix"] is False
+    # A trailing space must survive normalization so it attaches as a word-final
+    # "_" suffix: the keyboard predicts the next word via tokenize(context + " ")
+    # and relies on that boundary. With the default (True) the space is stripped,
+    # the model sees mid-word context and emits junk completions.
+    assert kw["remove_extra_whitespaces"] is False
     assert kw["character_coverage"] == 0.9999
     assert kw["pad_id"] == 3
     assert kw["user_defined_symbols"] == SPECIAL_TOKENS

@@ -70,3 +70,20 @@ def test_real_tokenizer_uses_suffix_whitespace(tmp_path):
     pieces = sp.encode("kot pies", out_type=str)
     assert any(p.endswith("▁") for p in pieces)
     assert not any(p.startswith("▁") for p in pieces)
+
+
+def test_real_tokenizer_preserves_trailing_space_boundary(tmp_path):
+    # The keyboard predicts the next word via tokenize(context + " ") and relies
+    # on the trailing space producing a word-final "_" suffix. SentencePiece's
+    # default remove_extra_whitespaces=True strips it (encode("kot ") would equal
+    # encode("kot")), leaving the model mid-word -> junk completions. Our spec
+    # sets it False; pin that the boundary survives.
+    corpus = tmp_path / "corpus.txt"
+    _make_corpus(corpus)
+    prefix = tmp_path / "pl_keyboard"
+    spm.SentencePieceTrainer.train(**ts.training_kwargs([corpus], str(prefix), vocab_size=600))
+    sp = spm.SentencePieceProcessor(model_file=f"{prefix}.model")
+
+    with_space = sp.encode("kot ", out_type=str)
+    assert with_space[-1].endswith("▁"), with_space
+    assert sp.encode("kot ", out_type=int) != sp.encode("kot", out_type=int)

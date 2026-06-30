@@ -30,6 +30,12 @@ def training_kwargs(
         "vocab_size": vocab_size - len(SPECIAL_TOKENS),
         "model_type": "bpe",
         "treat_whitespace_as_suffix": True,  # spaces as suffix ("wort_")
+        # Keep a trailing space so it attaches as the word-final "_" suffix. The
+        # keyboard predicts the next word via tokenize(context + " ") and depends
+        # on that boundary token; the SentencePiece default (True) strips the
+        # trailing space, leaving the model in a mid-word state that yields junk
+        # completions instead of next-word predictions.
+        "remove_extra_whitespaces": False,
         "character_coverage": 0.9999,
         "byte_fallback": True,
         "add_dummy_prefix": False,
