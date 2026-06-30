@@ -54,3 +54,18 @@ def test_format_word_correction_empty_when_unusable():
     assert tokens.format_word_correction("123", "dom") == ""  # no a-z chars
     assert tokens.format_word_correction("lo", "") == ""  # blank truth
     assert tokens.format_word_correction("lo", "   ") == ""
+
+
+def test_next_word_context_appends_single_trailing_space_boundary():
+    # Mirrors the keyboard's PredictNextWord prompt: tokenize(trim(context) + " ").
+    # The trailing space is the word-final boundary that makes the model predict
+    # the NEXT word; dropping it is the bug that produced garbage on-device.
+    assert tokens.next_word_context("Stany") == "Stany "
+    assert tokens.next_word_context("Idę do") == "Idę do "
+
+
+def test_next_word_context_trims_then_adds_exactly_one_space():
+    # trim() first (like the keyboard) so surrounding whitespace can't collapse
+    # the boundary or produce a double space.
+    assert tokens.next_word_context("  Stany  ") == "Stany "
+    assert tokens.next_word_context("") == " "

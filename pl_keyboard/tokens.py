@@ -56,3 +56,16 @@ def format_word_correction(typed_ascii: str, truth: str) -> str:
         return ""
     # Space after the word is required by the tokenizer; no space after <XBC>/<XEC>.
     return f"{BEGIN_USER_INPUT}{char_tokens}{BEGIN_CORRECTION}{truth} {END_CORRECTION}"
+
+
+def next_word_context(context: str) -> str:
+    """The exact text the keyboard tokenizes for a next-word prediction.
+
+    Mirrors PredictNextWord's `tokenize(trim(context) + " ")`: the context is
+    trimmed and a single trailing space appended. That trailing space is what
+    becomes the word-final boundary (the tokenizer keeps it via
+    `remove_extra_whitespaces=False`), so the model predicts the *next* word
+    rather than completing the current one. Dropping it is the bug that produced
+    garbage suggestions on-device.
+    """
+    return context.strip() + " "

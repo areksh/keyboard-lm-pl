@@ -55,20 +55,14 @@ def _load_model(model_dir: str, sp_model: str) -> Model:  # pragma: no cover - h
         out = greedy([bos, xbu, *char_ids, xbc], max_new=12, stop=xec)
         return sp.decode(out).strip()
 
-    def encode_context(context: str) -> list[int]:
-        # SentencePiece (treat_whitespace_as_suffix) strips a trailing space, so
-        # "do " tokenizes exactly like "do" with NO word boundary -> the model
-        # completes the word ("do" -> "dokladnie") instead of predicting the next
-        # one. Append a throwaway word so the last real token keeps its suffix-▁,
-        # then drop the throwaway: a genuine word boundary, as seen in training.
-        full = sp.encode(context + " x", out_type=int)
-        tail = sp.encode("x", out_type=int)
-        return full[: len(full) - len(tail)]
-
     def predict(context: str) -> str:
-        # Stop at <XBU>: with no preceding context the model may try to emit an
-        # autocorrect span rather than a plain next word — that's not a prediction.
-        out = greedy([bos, *encode_context(context)], max_new=6, stop=xbu)
+        # Build the prompt exactly as the keyboard does: tokenize(trim(context) +
+        # " "), the trailing space becoming the word-final boundary that makes the
+        # model predict the next word (the tokenizer keeps it via
+        # remove_extra_whitespaces=False). Stop at <XBU>: with no preceding context
+        # the model may emit an autocorrect span, which isn't a next-word guess.
+        ids = sp.encode(tokens.next_word_context(context), out_type=int)
+        out = greedy([bos, *ids], max_new=6, stop=xbu)
         word = sp.decode(out).strip().split(" ")[0] if out else ""
         return word.strip(",.!?;:\"'()")  # trailing punctuation isn't part of the word
 
