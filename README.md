@@ -98,6 +98,7 @@ Numbered CLIs wrapping the tested library:
 | convert | `07_convert_to_gguf.py` | `gguf_meta` | ✓ |
 | quantize | `08_quantize.py` | `llama-quantize` | ✓ |
 | eval | `09_eval.py` | `evaluation` (injected model) | ✓ |
+| release notes | `10_release_notes.py` | `evaluation`, `release_notes` (injected model + `llama-bench`) | ✓ |
 
 Example (with a `[train]` venv on Python 3.10–3.12):
 
@@ -114,6 +115,9 @@ python 07_convert_to_gguf.py --model-dir models/pl --sp-model data/tok/pl.model 
 python 08_quantize.py --input pl-f16.gguf           # -> pl-Q3_K_M/Q4_0/Q6_K/Q8_0.gguf
 python 09_eval.py --model-dir models/pl --sp-model data/tok/pl.model --eval-file data/heldout.txt \
     --show-examples   # also prints each benchmark case as input -> model output (to stderr)
+python 10_release_notes.py --model-dir models/pl --sp-model data/tok/pl.model \
+    --eval-file data/heldout.txt --version v0.1.0 --steps 200000 --pre-release \
+    --gguf 'pl-*.gguf' --output RELEASE.md --report metrics/v0.1.0.json
 ```
 
 `09_eval.py` reports held-out perplexity plus diacritic-restoration and next-word accuracy. Pass
@@ -121,6 +125,14 @@ python 09_eval.py --model-dir models/pl --sp-model data/tok/pl.model --eval-file
 report on stdout stays pipeable) — invaluable for telling "the model is wrong" apart from "the eval
 prompt is wrong". Restoration is scored case-insensitively (a no-context prompt makes the model emit
 a sentence-initial capital, e.g. `lozko -> Łóżko`, which still restores the diacritics correctly).
+
+`10_release_notes.py` writes a GitHub-release Markdown write-up: an architecture summary (read from
+the checkpoint's `config.json`), cold-start Top-1/3/5 accuracy + KSR and a prefix-accuracy table
+("after N typed chars") computed on the held-out set, and per-quantization size + `llama-bench`
+throughput tables for the GGUFs matched by `--gguf`. Step count can't be recovered from the
+checkpoint, so pass `--steps`; point `--baseline metrics/<prev>.json` at a previous run's `--report`
+to add the `Δ pp` comparison columns. `llama-bench` must be on `PATH` (or `--llama-bench`) whenever
+GGUFs are matched; omit `--gguf` for a metrics-only snapshot mid-training.
 
 ## Watching it run: progress & verbosity
 

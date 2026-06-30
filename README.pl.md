@@ -97,6 +97,7 @@ Ponumerowane skrypty CLI obsługujące testowaną bibliotekę:
 | konwersja | `07_convert_to_gguf.py` | `gguf_meta` | ✓ |
 | kwantyzacja | `08_quantize.py` | `llama-quantize` | ✓ |
 | ocena | `09_eval.py` | `evaluation` (wstrzyknięty model) | ✓ |
+| informacje o wydaniu | `10_release_notes.py` | `evaluation`, `release_notes` (wstrzyknięty model + `llama-bench`) | ✓ |
 
 Przykład (z środowiskiem `[train]` venv w Pythonie 3.10–3.12):
 
@@ -112,6 +113,9 @@ python 06_train_model.py --input data/clean.txt data/xbu.txt --sp-model data/tok
 python 07_convert_to_gguf.py --model-dir models/pl --sp-model data/tok/pl.model --output pl-f16.gguf
 python 08_quantize.py --input pl-f16.gguf           # -> pl-Q3_K_M/Q4_0/Q6_K/Q8_0.gguf
 python 09_eval.py --model-dir models/pl --sp-model data/tok/pl.model --eval-file data/heldout.txt
+python 10_release_notes.py --model-dir models/pl --sp-model data/tok/pl.model \
+    --eval-file data/heldout.txt --version v0.1.0 --steps 200000 --pre-release \
+    --gguf 'pl-*.gguf' --output RELEASE.md --report metrics/v0.1.0.json
 ```
 
 ## Obserwowanie przebiegu: postęp i poziom szczegółowości
